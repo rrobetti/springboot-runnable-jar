@@ -4,29 +4,43 @@ Simple spring boot app that reads a table and writes to a file.
 ## Architecture
 
 ```mermaid
-sequenceDiagram
-    participant SH as Shell Script
-    participant JAR as springboot-runnable-jar
-    participant COM as common (library)
-    participant DB as Database
-    participant FILE as Output File (CSV)
-
-    SH->>JAR: java -jar springboot-runnable-jar.jar <param>
-
-    JAR->>COM: use shared models & utilities
-
-    JAR->>DB: SELECT config_value FROM batch_config<br/>WHERE config_key = 'batch_size'
-    DB-->>JAR: batch_size (e.g. 100)
-
-    JAR->>FILE: create export_{param}.csv<br/>write CSV header
-
-    loop Stream rows (fetch size = batch_size)
-        JAR->>DB: SELECT id, name, email, status<br/>FROM person WHERE status = ?
-        DB-->>JAR: row batch
-        JAR->>FILE: append CSV rows
+flowchart LR
+    subgraph EXT["External Flow"]
+        E1([1. Trigger])
     end
 
-    JAR-->>SH: exit (output file path logged)
+    subgraph SH["Shell Script"]
+        S1[2. Start Java job\nwith parameter]
+        S2[3. Wait for job\nto complete]
+        S3[7. Move output file\nto archive]
+    end
 
-    SH->>FILE: mv export_{param}.csv /archive/export_{param}.csv
+    subgraph JAR["springboot-runnable-jar"]
+        J1[4. Load batch size\nfrom DB]
+        J2[5. Create output file\nand write CSV header]
+        J3[6. Stream rows from DB\nand append to file]
+    end
+
+    subgraph DB["Database"]
+        D1[(batch_config)]
+        D2[(person)]
+    end
+
+    subgraph FS["File System"]
+        F1[/export_{param}.csv/]
+        F2[/archive/export_{param}.csv/]
+    end
+
+    E1 --> S1
+    S1 --> S2
+    S2 --> J1
+    J1 --> D1
+    D1 --> J2
+    J2 --> F1
+    J2 --> J3
+    J3 --> D2
+    D2 --> J3
+    J3 --> F1
+    J3 --> S3
+    S3 --> F2
 ```
