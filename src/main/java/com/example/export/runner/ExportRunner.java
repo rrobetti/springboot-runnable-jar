@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.nio.file.Path;
@@ -20,6 +21,7 @@ import java.util.List;
  *   java -jar app.jar --export.param=myValue
  * </pre>
  */
+@Profile("!test")
 @Component
 public class ExportRunner implements ApplicationRunner {
 

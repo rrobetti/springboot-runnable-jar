@@ -1,14 +1,12 @@
 package com.example.export;
 
 import com.example.export.repository.BatchConfigRepository;
-import com.example.export.runner.ExportRunner;
 import com.example.export.service.ExportService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -28,14 +26,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 @ActiveProfiles("test")
 class ExportServiceIntegrationTest {
-
-    /**
-     * Prevent {@link ExportRunner} from executing on context startup
-     * (it would fail without a command-line parameter).
-     */
-    @MockBean
-    @SuppressWarnings("unused")
-    private ExportRunner exportRunner;
 
     @Autowired
     private ExportService exportService;
