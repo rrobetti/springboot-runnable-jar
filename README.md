@@ -27,8 +27,8 @@ flowchart LR
     end
 
     subgraph FS["File System"]
-        F1[/export_{param}.csv/]
-        F2[/archive/export_{param}.csv/]
+        F1["export_{param}.csv"]
+        F2["archive/export_{param}.csv"]
     end
 
     E1 --> S1
