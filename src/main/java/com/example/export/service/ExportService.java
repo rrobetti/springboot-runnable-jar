@@ -12,6 +12,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -21,8 +24,17 @@ import java.util.concurrent.atomic.AtomicLong;
  *   <li>Resolves the output file path from configurable properties, replacing the
  *       {@code {param}} placeholder in the filename with the supplied runtime value.</li>
  *   <li>Streams rows from the {@code person} table (filtered by status) and writes
- *       each row as a CSV line to the output file without loading all data into memory.</li>
+ *       each row as a fixed-width positional record to the output file without
+ *       loading all data into memory.</li>
  * </ol>
+ *
+ * <p>Positional record layout (total 180 characters per record):
+ * <pre>
+ *   Columns  1-20  : id     (right-justified, space-padded)
+ *   Columns 21-70  : name   (left-justified,  space-padded, truncated to 50 chars)
+ *   Columns 71-170 : email  (left-justified,  space-padded, truncated to 100 chars)
+ *   Columns 171-180: status (left-justified,  space-padded, truncated to 10 chars)
+ * </pre>
  */
 @Service
 public class ExportService {
@@ -32,8 +44,11 @@ public class ExportService {
     /** Placeholder used in the filename template. */
     public static final String PARAM_PLACEHOLDER = "{param}";
 
-    /** CSV header written as the first line of the output file. */
-    private static final String CSV_HEADER = "id,name,email,status";
+    // Fixed field widths for the mainframe positional record layout
+    public static final int WIDTH_ID     = 20;
+    public static final int WIDTH_NAME   = 50;
+    public static final int WIDTH_EMAIL  = 100;
+    public static final int WIDTH_STATUS = 10;
 
     private final AppProperties appProperties;
     private final BatchConfigRepository batchConfigRepository;
@@ -63,23 +78,20 @@ public class ExportService {
         Files.createDirectories(outputFile.getParent());
         log.info("Writing export to: {}", outputFile.toAbsolutePath());
 
-        // 3. Stream rows and write to file
+        // 3. Stream rows and write positional records directly from ResultSet
         AtomicLong rowCount = new AtomicLong(0);
 
         try (BufferedWriter writer = Files.newBufferedWriter(outputFile)) {
-            writer.write(CSV_HEADER);
-            writer.newLine();
-
             personRepository.streamByStatus(
                     appProperties.getFilter().getStatus(),
                     batchSize,
-                    person -> {
+                    rs -> {
                         try {
-                            writer.write(person.toCsvLine());
+                            writer.write(toPositionalRecord(rs));
                             writer.newLine();
                             rowCount.incrementAndGet();
-                        } catch (IOException e) {
-                            throw new ExportWriteException("Failed to write row: " + person, e);
+                        } catch (IOException | SQLException e) {
+                            throw new ExportWriteException("Failed to write row", e);
                         }
                     });
         }
@@ -99,7 +111,32 @@ public class ExportService {
     }
 
     /**
-     * Unchecked wrapper for {@link IOException} thrown inside the streaming lambda.
+     * Formats a single database row as a fixed-width positional record.
+     * String values are left-justified and space-padded; the numeric id is
+     * right-justified and space-padded. Values exceeding their field width are
+     * truncated to prevent record-length corruption.
+     */
+    static String toPositionalRecord(ResultSet rs) throws SQLException {
+        long   id     = rs.getLong("id");
+        String name   = truncate(Objects.toString(rs.getString("name"),   ""), WIDTH_NAME);
+        String email  = truncate(Objects.toString(rs.getString("email"),  ""), WIDTH_EMAIL);
+        String status = truncate(Objects.toString(rs.getString("status"), ""), WIDTH_STATUS);
+
+        return String.format(
+                "%" + WIDTH_ID + "d" +
+                "%-" + WIDTH_NAME   + "s" +
+                "%-" + WIDTH_EMAIL  + "s" +
+                "%-" + WIDTH_STATUS + "s",
+                id, name, email, status);
+    }
+
+    private static String truncate(String value, int maxLength) {
+        return value.length() <= maxLength ? value : value.substring(0, maxLength);
+    }
+
+    /**
+     * Unchecked wrapper for {@link IOException} or {@link SQLException} thrown
+     * inside the streaming callback.
      */
     public static class ExportWriteException extends RuntimeException {
         public ExportWriteException(String message, Throwable cause) {

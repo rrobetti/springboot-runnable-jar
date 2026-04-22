@@ -46,8 +46,7 @@ public class AppProperties {
          * Filename template. The literal {@code {param}} is replaced at runtime with
          * the value supplied on the command line.
          */
-        private String filename = "export_{param}.csv";
-
+        private String filename = "export_{param}.dat";
         public String getDirectory() {
             return directory;
         }
