@@ -22,13 +22,6 @@
         <java.version>17</java.version>
     </properties>
 
-    <repositories>
-        <repository>
-            <id>jitpack.io</id>
-            <url>https://jitpack.io</url>
-        </repository>
-    </repositories>
-
     <dependencies>
         <!-- Spring Boot core -->
         <dependency>
@@ -56,18 +49,18 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- JRecord via JitPack -->
+        <!-- JRecord -->
         <dependency>
-            <groupId>com.github.bmTas</groupId>
-            <artifactId>JRecord</artifactId>
+            <groupId>net.sf</groupId>
+            <artifactId>jrecord</artifactId>
             <version>0.90.2</version>
         </dependency>
          
-        <!-- cb2xml via JitPack -->
+        <!-- cb2xml -->
         <dependency>
-            <groupId>com.github.bmTas</groupId>
+            <groupId>net.sf</groupId>
             <artifactId>cb2xml</artifactId>
-            <version>1.01.08</version>
+            <version>0.95.8</version>
         </dependency>
                       
         <!-- Test dependencies -->
