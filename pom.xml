@@ -54,6 +54,7 @@
             <groupId>net.sf.jrecord</groupId>
             <artifactId>JRecord</artifactId>
             <version>0.90.2</version>
+            <scope>compile</scope>
         </dependency>
 
         <!-- cb2xml – required transitive dependency of JRecord -->
