@@ -1,13 +1,18 @@
 package com.example.export.service;
 
 import com.example.export.config.AppProperties;
+import com.example.export.model.Person;
 import com.example.export.repository.BatchConfigRepository;
 import com.example.export.repository.PersonRepository;
+import net.sf.JRecord.Details.AbstractLine;
+import net.sf.JRecord.IO.AbstractLineWriter;
+import net.sf.JRecord.JRecordInterface1;
+import net.sf.JRecord.Types.Type;
+import net.sf.JRecord.def.IO.builders.IFixedWidthIOBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,8 +26,20 @@ import java.util.concurrent.atomic.AtomicLong;
  *   <li>Resolves the output file path from configurable properties, replacing the
  *       {@code {param}} placeholder in the filename with the supplied runtime value.</li>
  *   <li>Streams rows from the {@code person} table (filtered by status) and writes
- *       each row as a CSV line to the output file without loading all data into memory.</li>
+ *       each row as a fixed-width positional line to the output file without loading
+ *       all data into memory.</li>
  * </ol>
+ *
+ * <p>The positional file layout is:
+ * <pre>
+ *   Field   Position  Length  Type
+ *   ------  --------  ------  --------------------
+ *   id          1       10    Numeric right-justified
+ *   name       11       50    Character (space-padded)
+ *   email      61       60    Character (space-padded)
+ *   status    121       10    Character (space-padded)
+ * </pre>
+ * The first line of the file is a header with the column names at their respective positions.
  */
 @Service
 public class ExportService {
@@ -32,8 +49,11 @@ public class ExportService {
     /** Placeholder used in the filename template. */
     public static final String PARAM_PLACEHOLDER = "{param}";
 
-    /** CSV header written as the first line of the output file. */
-    private static final String CSV_HEADER = "id,name,email,status";
+    /** Fixed-width field definitions: name, type, length. */
+    public static final int ID_LEN     = 10;
+    public static final int NAME_LEN   = 50;
+    public static final int EMAIL_LEN  = 60;
+    public static final int STATUS_LEN = 10;
 
     private final AppProperties appProperties;
     private final BatchConfigRepository batchConfigRepository;
@@ -45,6 +65,19 @@ public class ExportService {
         this.appProperties = appProperties;
         this.batchConfigRepository = batchConfigRepository;
         this.personRepository = personRepository;
+    }
+
+    /**
+     * Builds the JRecord {@link IFixedWidthIOBuilder} for the positional layout.
+     */
+    IFixedWidthIOBuilder createIOBuilder() {
+        return JRecordInterface1.FIXED_WIDTH.newIOBuilder()
+                .defineFieldsByLength()
+                    .addFieldByLength("id",     Type.ftCharRightJust,     ID_LEN,     0)
+                    .addFieldByLength("name",   Type.ftChar,              NAME_LEN,   0)
+                    .addFieldByLength("email",  Type.ftChar,              EMAIL_LEN,  0)
+                    .addFieldByLength("status", Type.ftChar,              STATUS_LEN, 0)
+                .endOfRecord();
     }
 
     /**
@@ -63,29 +96,52 @@ public class ExportService {
         Files.createDirectories(outputFile.getParent());
         log.info("Writing export to: {}", outputFile.toAbsolutePath());
 
-        // 3. Stream rows and write to file
+        // 3. Build JRecord IO builder for the fixed-width layout
+        IFixedWidthIOBuilder ioBuilder = createIOBuilder();
+
+        // 4. Stream rows and write to positional file
         AtomicLong rowCount = new AtomicLong(0);
 
-        try (BufferedWriter writer = Files.newBufferedWriter(outputFile)) {
-            writer.write(CSV_HEADER);
-            writer.newLine();
+        AbstractLineWriter writer = ioBuilder.newWriter(outputFile.toString());
+        try {
+            // Write header line
+            AbstractLine headerLine = ioBuilder.newLine();
+            headerLine.getFieldValue("id").set("id");
+            headerLine.getFieldValue("name").set("name");
+            headerLine.getFieldValue("email").set("email");
+            headerLine.getFieldValue("status").set("status");
+            writer.write(headerLine);
 
+            // Stream and write data lines
             personRepository.streamByStatus(
                     appProperties.getFilter().getStatus(),
                     batchSize,
                     person -> {
                         try {
-                            writer.write(person.toCsvLine());
-                            writer.newLine();
+                            writer.write(toPositionalLine(ioBuilder, person));
                             rowCount.incrementAndGet();
                         } catch (IOException e) {
                             throw new ExportWriteException("Failed to write row: " + person, e);
                         }
                     });
+        } finally {
+            writer.close();
         }
 
         log.info("Export complete. {} rows written to {}", rowCount.get(), outputFile.toAbsolutePath());
         return outputFile;
+    }
+
+    /**
+     * Converts a {@link Person} into a JRecord fixed-width {@link AbstractLine}.
+     */
+    private AbstractLine toPositionalLine(IFixedWidthIOBuilder ioBuilder, Person person) throws IOException {
+        AbstractLine line = ioBuilder.newLine();
+        line.getFieldValue("id").set(String.valueOf(person.getId()));
+        line.getFieldValue("name").set(person.getName() != null ? person.getName() : "");
+        line.getFieldValue("email").set(person.getEmail() != null ? person.getEmail() : "");
+        line.getFieldValue("status").set(person.getStatus() != null ? person.getStatus() : "");
+        return line;
     }
 
     /**

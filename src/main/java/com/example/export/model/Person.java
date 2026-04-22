@@ -52,27 +52,6 @@ public class Person {
         this.status = status;
     }
 
-    /**
-     * Returns the person data as a CSV line (id,name,email,status).
-     */
-    public String toCsvLine() {
-        return String.join(",",
-                String.valueOf(id),
-                escapeCsv(name),
-                escapeCsv(email),
-                escapeCsv(status));
-    }
-
-    private static String escapeCsv(String value) {
-        if (value == null) {
-            return "";
-        }
-        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
-            return "\"" + value.replace("\"", "\"\"") + "\"";
-        }
-        return value;
-    }
-
     @Override
     public String toString() {
         return "Person{id=" + id + ", name='" + name + "', email='" + email + "', status='" + status + "'}";

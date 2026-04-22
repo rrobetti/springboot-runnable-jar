@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+import static com.example.export.service.ExportService.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -72,30 +73,44 @@ class ExportServiceIntegrationTest {
     @Test
     void resolveOutputPath_replacesParamPlaceholder() {
         Path path = exportService.resolveOutputPath("jan2024");
-        assertThat(path.getFileName().toString()).isEqualTo("export_jan2024.csv");
+        assertThat(path.getFileName().toString()).isEqualTo("export_jan2024.txt");
     }
 
     @Test
     void resolveOutputPath_withEmptyParam_producesValidPath() {
         Path path = exportService.resolveOutputPath("");
-        assertThat(path.getFileName().toString()).isEqualTo("export_.csv");
+        assertThat(path.getFileName().toString()).isEqualTo("export_.txt");
     }
 
     // ─── ExportService – full export ──────────────────────────────────────────
 
+    /**
+     * Verifies the header line of the positional file has column names at their
+     * respective fixed-width positions.
+     */
+    private void assertHeaderLine(String line) {
+        // "id" starts at position 0, padded to ID_LEN
+        assertThat(line.substring(0, ID_LEN).trim()).isEqualTo("id");
+        // "name" starts at ID_LEN, padded to NAME_LEN
+        assertThat(line.substring(ID_LEN, ID_LEN + NAME_LEN).trim()).isEqualTo("name");
+        // "email" starts at ID_LEN + NAME_LEN, padded to EMAIL_LEN
+        assertThat(line.substring(ID_LEN + NAME_LEN, ID_LEN + NAME_LEN + EMAIL_LEN).trim()).isEqualTo("email");
+        // "status" starts at ID_LEN + NAME_LEN + EMAIL_LEN, padded to STATUS_LEN
+        assertThat(line.substring(ID_LEN + NAME_LEN + EMAIL_LEN).trim()).isEqualTo("status");
+    }
+
     @Test
     void export_createsFileWithHeaderOnly_whenNoActivePersons() throws IOException {
-        // No persons in the table (cleaned in @BeforeEach)
         outputFile = exportService.export("empty");
 
         assertThat(Files.exists(outputFile)).isTrue();
         List<String> lines = Files.readAllLines(outputFile);
         assertThat(lines).hasSize(1);
-        assertThat(lines.get(0)).isEqualTo("id,name,email,status");
+        assertHeaderLine(lines.get(0));
     }
 
     @Test
-    void export_writesActivePersonsAsCsvRows() throws IOException {
+    void export_writesActivePersonsAsPositionalRows() throws IOException {
         jdbcTemplate.update("INSERT INTO person(name,email,status) VALUES(?,?,?)",
                 "Alice", "alice@test.com", "ACTIVE");
         jdbcTemplate.update("INSERT INTO person(name,email,status) VALUES(?,?,?)",
@@ -108,7 +123,10 @@ class ExportServiceIntegrationTest {
         List<String> lines = Files.readAllLines(outputFile);
         // header + 2 active rows (Carol is INACTIVE and must be excluded)
         assertThat(lines).hasSize(3);
-        assertThat(lines.get(0)).isEqualTo("id,name,email,status");
+        assertHeaderLine(lines.get(0));
+        // Each line should be at least ID_LEN + NAME_LEN + EMAIL_LEN + STATUS_LEN chars wide
+        int expectedWidth = ID_LEN + NAME_LEN + EMAIL_LEN + STATUS_LEN;
+        assertThat(lines.get(0).length()).isEqualTo(expectedWidth);
         assertThat(lines).anyMatch(l -> l.contains("Alice"));
         assertThat(lines).anyMatch(l -> l.contains("Bob"));
         assertThat(lines).noneMatch(l -> l.contains("Carol"));
@@ -118,20 +136,21 @@ class ExportServiceIntegrationTest {
     void export_filenameContainsSuppliedParam() throws IOException {
         outputFile = exportService.export("Q1-2024");
 
-        assertThat(outputFile.getFileName().toString()).isEqualTo("export_Q1-2024.csv");
+        assertThat(outputFile.getFileName().toString()).isEqualTo("export_Q1-2024.txt");
         assertThat(Files.exists(outputFile)).isTrue();
     }
 
     @Test
-    void export_handlesCsvValuesWithCommas() throws IOException {
+    void export_writesNameWithCommaWithoutQuoting() throws IOException {
         jdbcTemplate.update("INSERT INTO person(name,email,status) VALUES(?,?,?)",
                 "Smith, John", "john@test.com", "ACTIVE");
 
         outputFile = exportService.export("commatest");
 
         List<String> lines = Files.readAllLines(outputFile);
-        // The name contains a comma so it should be quoted in CSV
-        assertThat(lines).anyMatch(l -> l.contains("\"Smith, John\""));
+        // In a positional file, commas are written as-is – no quoting required
+        assertThat(lines).anyMatch(l -> l.contains("Smith, John"));
+        assertThat(lines).noneMatch(l -> l.contains("\"Smith, John\""));
     }
 
     @Test

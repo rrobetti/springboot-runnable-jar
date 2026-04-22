@@ -49,6 +49,20 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- JRecord – fixed-width / positional file writing -->
+        <dependency>
+            <groupId>net.sf.jrecord</groupId>
+            <artifactId>JRecord</artifactId>
+            <version>0.93.3</version>
+        </dependency>
+
+        <!-- cb2xml – required transitive dependency of JRecord -->
+        <dependency>
+            <groupId>net.sf</groupId>
+            <artifactId>cb2xml</artifactId>
+            <version>1.01.08</version>
+        </dependency>
+
         <!-- Test dependencies -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
