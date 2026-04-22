@@ -10,8 +10,9 @@ CREATE TABLE IF NOT EXISTS batch_config (
 -- ─── person ─────────────────────────────────────────────────────────────────
 -- Source table read by the export job.
 CREATE TABLE IF NOT EXISTS person (
-    id     BIGINT       PRIMARY KEY AUTO_INCREMENT,
-    name   VARCHAR(255) NOT NULL,
-    email  VARCHAR(255),
-    status VARCHAR(50)  NOT NULL
+    id          BIGINT       PRIMARY KEY AUTO_INCREMENT,
+    name        VARCHAR(255) NOT NULL,
+    email       VARCHAR(255),
+    status      VARCHAR(50)  NOT NULL,
+    record_date DATE         NOT NULL
 );

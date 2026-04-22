@@ -18,6 +18,8 @@ class ExportRunnerTest {
     private final ExportService exportService = Mockito.mock(ExportService.class);
     private final ExportRunner runner = new ExportRunner(exportService);
 
+    // ─── resolveParam ─────────────────────────────────────────────────────────
+
     @Test
     void resolveParam_fromNamedOption() {
         DefaultApplicationArguments args = new DefaultApplicationArguments("--export.param=january");
@@ -43,5 +45,37 @@ class ExportRunnerTest {
         assertThatThrownBy(() -> runner.resolveParam(args))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("runtime parameter is required");
+    }
+
+    // ─── resolveOutputDir ─────────────────────────────────────────────────────
+
+    @Test
+    void resolveOutputDir_fromNamedOption() {
+        DefaultApplicationArguments args =
+                new DefaultApplicationArguments("--export.outputDir=/tmp/out");
+        assertThat(runner.resolveOutputDir(args)).isEqualTo("/tmp/out");
+    }
+
+    @Test
+    void resolveOutputDir_returnsNullWhenAbsent() {
+        DefaultApplicationArguments args =
+                new DefaultApplicationArguments("--export.param=20240115");
+        assertThat(runner.resolveOutputDir(args)).isNull();
+    }
+
+    // ─── resolveErrorDir ──────────────────────────────────────────────────────
+
+    @Test
+    void resolveErrorDir_fromNamedOption() {
+        DefaultApplicationArguments args =
+                new DefaultApplicationArguments("--export.errorDir=/tmp/err");
+        assertThat(runner.resolveErrorDir(args)).isEqualTo("/tmp/err");
+    }
+
+    @Test
+    void resolveErrorDir_returnsNullWhenAbsent() {
+        DefaultApplicationArguments args =
+                new DefaultApplicationArguments("--export.param=20240115");
+        assertThat(runner.resolveErrorDir(args)).isNull();
     }
 }
