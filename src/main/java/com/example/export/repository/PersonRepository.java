@@ -1,13 +1,12 @@
 package com.example.export.repository;
 
-import com.example.export.model.Person;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Repository;
 
 import java.sql.ResultSet;
-import java.util.function.Consumer;
 
 /**
  * Streams rows from the {@code person} table using a server-side cursor
@@ -38,17 +37,17 @@ public class PersonRepository {
     }
 
     /**
-     * Streams all {@link Person} rows matching the given {@code status}, fetching
+     * Streams all rows matching the given {@code status}, fetching
      * {@code fetchSize} rows at a time from the database to limit memory usage.
      *
-     * <p>Each row is passed to {@code rowConsumer} as soon as it is fetched —
-     * no intermediate list is built.
+     * <p>The supplied {@link RowCallbackHandler} is invoked once per row with the
+     * live {@link ResultSet} — no intermediate object is created.
      *
-     * @param status      value to filter on the {@code status} column
-     * @param fetchSize   JDBC fetch size (batch size loaded from {@code batch_config})
-     * @param rowConsumer callback invoked for every matching row
+     * @param status     value to filter on the {@code status} column
+     * @param fetchSize  JDBC fetch size (batch size loaded from {@code batch_config})
+     * @param rowHandler callback invoked for every matching row
      */
-    public void streamByStatus(String status, int fetchSize, Consumer<Person> rowConsumer) {
+    public void streamByStatus(String status, int fetchSize, RowCallbackHandler rowHandler) {
         log.info("Streaming persons with status='{}' and fetchSize={}", status, fetchSize);
 
         // Use PreparedStatementCreator to set the JDBC fetch size (controls how many rows
@@ -65,14 +64,7 @@ public class PersonRepository {
                     ps.setString(1, status);
                     return ps;
                 },
-                (ResultSet rs) -> {
-                    Person person = new Person(
-                            rs.getLong("id"),
-                            rs.getString("name"),
-                            rs.getString("email"),
-                            rs.getString("status"));
-                    rowConsumer.accept(person);
-                }
+                rowHandler
         );
     }
 }

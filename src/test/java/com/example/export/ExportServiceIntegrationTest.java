@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+import static com.example.export.service.ExportService.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -37,6 +38,9 @@ class ExportServiceIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     private Path outputFile;
+
+    /** Expected record length: sum of all field widths. */
+    private static final int RECORD_LENGTH = WIDTH_ID + WIDTH_NAME + WIDTH_EMAIL + WIDTH_STATUS;
 
     @BeforeEach
     void cleanPersonTable() {
@@ -72,30 +76,29 @@ class ExportServiceIntegrationTest {
     @Test
     void resolveOutputPath_replacesParamPlaceholder() {
         Path path = exportService.resolveOutputPath("jan2024");
-        assertThat(path.getFileName().toString()).isEqualTo("export_jan2024.csv");
+        assertThat(path.getFileName().toString()).isEqualTo("export_jan2024.dat");
     }
 
     @Test
     void resolveOutputPath_withEmptyParam_producesValidPath() {
         Path path = exportService.resolveOutputPath("");
-        assertThat(path.getFileName().toString()).isEqualTo("export_.csv");
+        assertThat(path.getFileName().toString()).isEqualTo("export_.dat");
     }
 
     // ─── ExportService – full export ──────────────────────────────────────────
 
     @Test
-    void export_createsFileWithHeaderOnly_whenNoActivePersons() throws IOException {
+    void export_createsEmptyFile_whenNoActivePersons() throws IOException {
         // No persons in the table (cleaned in @BeforeEach)
         outputFile = exportService.export("empty");
 
         assertThat(Files.exists(outputFile)).isTrue();
         List<String> lines = Files.readAllLines(outputFile);
-        assertThat(lines).hasSize(1);
-        assertThat(lines.get(0)).isEqualTo("id,name,email,status");
+        assertThat(lines).isEmpty();
     }
 
     @Test
-    void export_writesActivePersonsAsCsvRows() throws IOException {
+    void export_writesActivePersonsAsPositionalRecords() throws IOException {
         jdbcTemplate.update("INSERT INTO person(name,email,status) VALUES(?,?,?)",
                 "Alice", "alice@test.com", "ACTIVE");
         jdbcTemplate.update("INSERT INTO person(name,email,status) VALUES(?,?,?)",
@@ -106,32 +109,72 @@ class ExportServiceIntegrationTest {
         outputFile = exportService.export("testrun");
 
         List<String> lines = Files.readAllLines(outputFile);
-        // header + 2 active rows (Carol is INACTIVE and must be excluded)
-        assertThat(lines).hasSize(3);
-        assertThat(lines.get(0)).isEqualTo("id,name,email,status");
+        // 2 active rows only (Carol is INACTIVE and must be excluded)
+        assertThat(lines).hasSize(2);
         assertThat(lines).anyMatch(l -> l.contains("Alice"));
         assertThat(lines).anyMatch(l -> l.contains("Bob"));
         assertThat(lines).noneMatch(l -> l.contains("Carol"));
     }
 
     @Test
+    void export_recordsHaveFixedWidth() throws IOException {
+        jdbcTemplate.update("INSERT INTO person(name,email,status) VALUES(?,?,?)",
+                "Alice", "alice@test.com", "ACTIVE");
+
+        outputFile = exportService.export("widthcheck");
+
+        List<String> lines = Files.readAllLines(outputFile);
+        assertThat(lines).hasSize(1);
+        assertThat(lines.get(0)).hasSize(RECORD_LENGTH);
+    }
+
+    @Test
+    void export_idIsRightJustified() throws IOException {
+        jdbcTemplate.update("INSERT INTO person(name,email,status) VALUES(?,?,?)",
+                "Alice", "alice@test.com", "ACTIVE");
+
+        outputFile = exportService.export("idjust");
+
+        String record = Files.readAllLines(outputFile).get(0);
+        // The id field occupies the first WIDTH_ID characters and must end with a digit
+        String idField = record.substring(0, WIDTH_ID);
+        assertThat(idField.stripLeading()).matches("\\d+");
+    }
+
+    @Test
+    void export_stringFieldsArePaddedWithSpaces() throws IOException {
+        jdbcTemplate.update("INSERT INTO person(name,email,status) VALUES(?,?,?)",
+                "Bob", "b@t.com", "ACTIVE");
+
+        outputFile = exportService.export("padcheck");
+
+        String record = Files.readAllLines(outputFile).get(0);
+        // name field starts at column WIDTH_ID and is WIDTH_NAME chars wide
+        String nameField = record.substring(WIDTH_ID, WIDTH_ID + WIDTH_NAME);
+        assertThat(nameField).startsWith("Bob");
+        assertThat(nameField).endsWith(" ");
+    }
+
+    @Test
     void export_filenameContainsSuppliedParam() throws IOException {
         outputFile = exportService.export("Q1-2024");
 
-        assertThat(outputFile.getFileName().toString()).isEqualTo("export_Q1-2024.csv");
+        assertThat(outputFile.getFileName().toString()).isEqualTo("export_Q1-2024.dat");
         assertThat(Files.exists(outputFile)).isTrue();
     }
 
     @Test
-    void export_handlesCsvValuesWithCommas() throws IOException {
+    void export_longFieldValuesAreTruncated() throws IOException {
+        String longName = "A".repeat(100); // exceeds WIDTH_NAME (50)
         jdbcTemplate.update("INSERT INTO person(name,email,status) VALUES(?,?,?)",
-                "Smith, John", "john@test.com", "ACTIVE");
+                longName, "a@test.com", "ACTIVE");
 
-        outputFile = exportService.export("commatest");
+        outputFile = exportService.export("trunctest");
 
         List<String> lines = Files.readAllLines(outputFile);
-        // The name contains a comma so it should be quoted in CSV
-        assertThat(lines).anyMatch(l -> l.contains("\"Smith, John\""));
+        assertThat(lines).hasSize(1);
+        // Record must still be exactly RECORD_LENGTH chars
+        assertThat(lines.get(0)).hasSize(RECORD_LENGTH);
     }
 
     @Test
@@ -148,7 +191,7 @@ class ExportServiceIntegrationTest {
         outputFile = exportService.export("bulk");
 
         List<String> lines = Files.readAllLines(outputFile);
-        // header + 10 active rows
-        assertThat(lines).hasSize(11);
+        // 10 active rows only (no header)
+        assertThat(lines).hasSize(10);
     }
 }
