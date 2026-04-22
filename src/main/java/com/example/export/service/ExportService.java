@@ -97,29 +97,28 @@ public class ExportService {
      *
      * <p>On success the transaction is committed and the output file path is
      * returned.  On any failure the transaction is rolled back and the partial
-     * output file (if it exists) is moved to the error directory before the
-     * exception is re-thrown.
+     * output file (if it exists) is moved to the configured error directory
+     * ({@code app.error.directory}) before the exception is re-thrown.
+     * The calling process will therefore exit with a non-zero status code.
      *
      * @param param     date string in {@code YYYYMMDD} format; also used in the
      *                  output filename
      * @param outputDir output directory override, or {@code null} to use
      *                  {@code app.output.directory}
-     * @param errorDir  error directory override, or {@code null} to use
-     *                  {@code app.error.directory}
      * @return path of the successfully written output file
      * @throws IOException            if the output file cannot be created or written
      * @throws java.time.format.DateTimeParseException if {@code param} is not a
      *                                valid {@code YYYYMMDD} date
      */
     @Transactional(rollbackFor = Exception.class)
-    public Path export(String param, String outputDir, String errorDir) throws IOException {
+    public Path export(String param, String outputDir) throws IOException {
         int batchSize = batchConfigRepository.loadBatchSize();
 
         LocalDate date = LocalDate.parse(param, DATE_FORMAT);
         String fromStatus = appProperties.getFilter().getStatus();
 
         Path outputFile  = resolveOutputPath(param, outputDir);
-        Path errorDirectory = resolveErrorDir(errorDir);
+        Path errorDirectory = resolveErrorDir();
 
         Files.createDirectories(outputFile.getParent());
         log.info("Writing export to: {}", outputFile.toAbsolutePath());
@@ -183,9 +182,8 @@ public class ExportService {
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    private Path resolveErrorDir(String errorDir) {
-        String directory = errorDir != null ? errorDir : appProperties.getError().getDirectory();
-        return Paths.get(directory);
+    private Path resolveErrorDir() {
+        return Paths.get(appProperties.getError().getDirectory());
     }
 
     private void moveToErrorDir(Path outputFile, Path errorDir) {

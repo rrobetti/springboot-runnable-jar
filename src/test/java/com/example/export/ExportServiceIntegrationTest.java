@@ -1,5 +1,6 @@
 package com.example.export;
 
+import com.example.export.config.AppProperties;
 import com.example.export.repository.BatchConfigRepository;
 import com.example.export.repository.PersonRepository;
 import com.example.export.service.ExportService;
@@ -17,6 +18,7 @@ import org.springframework.test.context.ActiveProfiles;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -48,6 +50,9 @@ class ExportServiceIntegrationTest {
     private BatchConfigRepository batchConfigRepository;
 
     @Autowired
+    private AppProperties appProperties;
+
+    @Autowired
     private JdbcTemplate jdbcTemplate;
 
     @SpyBean
@@ -68,6 +73,13 @@ class ExportServiceIntegrationTest {
         Mockito.reset(personRepository);
         if (outputFile != null && Files.exists(outputFile)) {
             Files.delete(outputFile);
+        }
+        // Clean up any files left in the error directory by failure tests
+        Path errorDir = Paths.get(appProperties.getError().getDirectory());
+        if (Files.exists(errorDir)) {
+            try (var stream = Files.list(errorDir)) {
+                stream.forEach(f -> { try { Files.delete(f); } catch (IOException ignored) {} });
+            }
         }
     }
 
@@ -130,7 +142,7 @@ class ExportServiceIntegrationTest {
     @Test
     void export_createsFileWithHeaderOnly_whenNoMatchingPersons() throws IOException {
         // No persons in the table (cleaned in @BeforeEach)
-        outputFile = exportService.export(TEST_DATE, null, null);
+        outputFile = exportService.export(TEST_DATE, null);
 
         assertThat(Files.exists(outputFile)).isTrue();
         List<String> lines = Files.readAllLines(outputFile);
@@ -144,7 +156,7 @@ class ExportServiceIntegrationTest {
         insertPerson("Bob",   "bob@test.com",   "ACTIVE");
         insertPerson("Carol", "carol@test.com", "INACTIVE");
 
-        outputFile = exportService.export(TEST_DATE, null, null);
+        outputFile = exportService.export(TEST_DATE, null);
 
         List<String> lines = Files.readAllLines(outputFile);
         // header + 2 ACTIVE rows (Carol is INACTIVE and must be excluded)
@@ -163,7 +175,7 @@ class ExportServiceIntegrationTest {
                 "INSERT INTO person(name,email,status,record_date) VALUES(?,?,?,?)",
                 "Other", "other@test.com", "ACTIVE", LocalDate.of(2024, 1, 16));
 
-        outputFile = exportService.export(TEST_DATE, null, null);
+        outputFile = exportService.export(TEST_DATE, null);
 
         List<String> lines = Files.readAllLines(outputFile);
         // header + 1 row (Alice only; Other is on a different date)
@@ -176,7 +188,7 @@ class ExportServiceIntegrationTest {
     void export_headerAndDetailRecordsHaveFixedWidth() throws IOException {
         insertPerson("Alice", "alice@test.com", "ACTIVE");
 
-        outputFile = exportService.export(TEST_DATE, null, null);
+        outputFile = exportService.export(TEST_DATE, null);
 
         List<String> lines = Files.readAllLines(outputFile);
         assertThat(lines).hasSize(2);
@@ -186,7 +198,7 @@ class ExportServiceIntegrationTest {
 
     @Test
     void export_headerContainsDateAndStatus() throws IOException {
-        outputFile = exportService.export(TEST_DATE, null, null);
+        outputFile = exportService.export(TEST_DATE, null);
 
         String header = Files.readAllLines(outputFile).get(0);
         assertThat(header).startsWith("H");
@@ -198,7 +210,7 @@ class ExportServiceIntegrationTest {
     void export_idIsRightJustified() throws IOException {
         insertPerson("Alice", "alice@test.com", "ACTIVE");
 
-        outputFile = exportService.export(TEST_DATE, null, null);
+        outputFile = exportService.export(TEST_DATE, null);
 
         // Line 0 is the header; line 1 is the first detail record
         String detail = Files.readAllLines(outputFile).get(1);
@@ -210,7 +222,7 @@ class ExportServiceIntegrationTest {
     void export_stringFieldsArePaddedWithSpaces() throws IOException {
         insertPerson("Bob", "b@t.com", "ACTIVE");
 
-        outputFile = exportService.export(TEST_DATE, null, null);
+        outputFile = exportService.export(TEST_DATE, null);
 
         String detail = Files.readAllLines(outputFile).get(1);
         // name field starts at column WIDTH_ID and is WIDTH_NAME chars wide
@@ -221,7 +233,7 @@ class ExportServiceIntegrationTest {
 
     @Test
     void export_filenameContainsSuppliedParam() throws IOException {
-        outputFile = exportService.export(TEST_DATE, null, null);
+        outputFile = exportService.export(TEST_DATE, null);
 
         assertThat(outputFile.getFileName().toString()).isEqualTo("export_" + TEST_DATE + ".dat");
         assertThat(Files.exists(outputFile)).isTrue();
@@ -234,7 +246,7 @@ class ExportServiceIntegrationTest {
                 "INSERT INTO person(name,email,status,record_date) VALUES(?,?,?,?)",
                 longName, "a@test.com", "ACTIVE", TEST_LOCAL_DATE);
 
-        outputFile = exportService.export(TEST_DATE, null, null);
+        outputFile = exportService.export(TEST_DATE, null);
 
         List<String> lines = Files.readAllLines(outputFile);
         assertThat(lines).hasSize(2); // header + 1 detail
@@ -250,7 +262,7 @@ class ExportServiceIntegrationTest {
         }
         insertPerson("Ignored", "ignored@test.com", "INACTIVE");
 
-        outputFile = exportService.export(TEST_DATE, null, null);
+        outputFile = exportService.export(TEST_DATE, null);
 
         List<String> lines = Files.readAllLines(outputFile);
         // header + 10 ACTIVE rows
@@ -260,7 +272,7 @@ class ExportServiceIntegrationTest {
     // ─── ExportService – transaction rollback ─────────────────────────────────
 
     @Test
-    void export_rollsBackStatusUpdateOnFailure(@TempDir Path tempOut, @TempDir Path tempErr)
+    void export_rollsBackStatusUpdateOnFailure(@TempDir Path tempOut)
             throws IOException {
         insertPerson("Alice", "alice@test.com", "ACTIVE");
 
@@ -269,7 +281,7 @@ class ExportServiceIntegrationTest {
                 .streamByDateAndStatus(any(), any(), anyInt(), any());
 
         assertThatThrownBy(
-                () -> exportService.export(TEST_DATE, tempOut.toString(), tempErr.toString()))
+                () -> exportService.export(TEST_DATE, tempOut.toString()))
                 .isInstanceOf(RuntimeException.class);
 
         // Status must have been rolled back to ACTIVE
@@ -281,7 +293,7 @@ class ExportServiceIntegrationTest {
     // ─── ExportService – error directory ─────────────────────────────────────
 
     @Test
-    void export_movesPartialFileToErrorDirOnFailure(@TempDir Path tempOut, @TempDir Path tempErr)
+    void export_movesPartialFileToErrorDirOnFailure(@TempDir Path tempOut)
             throws IOException {
         insertPerson("Alice", "alice@test.com", "ACTIVE");
 
@@ -290,11 +302,12 @@ class ExportServiceIntegrationTest {
                 .streamByDateAndStatus(any(), any(), anyInt(), any());
 
         assertThatThrownBy(
-                () -> exportService.export(TEST_DATE, tempOut.toString(), tempErr.toString()))
+                () -> exportService.export(TEST_DATE, tempOut.toString()))
                 .isInstanceOf(RuntimeException.class);
 
-        // The partial file (containing at minimum the header) must be in the error dir
-        Path movedFile = tempErr.resolve("export_" + TEST_DATE + ".dat");
+        // The partial file (header at minimum) must be in the configured error directory
+        Path movedFile = Paths.get(appProperties.getError().getDirectory(),
+                "export_" + TEST_DATE + ".dat");
         assertThat(movedFile).exists();
         List<String> lines = Files.readAllLines(movedFile);
         assertThat(lines.get(0)).startsWith("H");

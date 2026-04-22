@@ -14,6 +14,9 @@ import java.util.List;
 /**
  * Entry point executed after the application context is started.
  *
+ * <p>Exits with code {@code 0} on success and code {@code 1} on any failure
+ * (standard runnable-job behaviour via Spring Boot's {@link ApplicationRunner}).
+ *
  * <p>Required argument:
  * <pre>
  *   --export.param=YYYYMMDD   (or as the first positional argument)
@@ -22,14 +25,13 @@ import java.util.List;
  * <p>Optional arguments:
  * <pre>
  *   --export.outputDir=/path/to/output   overrides app.output.directory
- *   --export.errorDir=/path/to/error     overrides app.error.directory
  * </pre>
  *
  * <p>Examples:
  * <pre>
  *   java -jar app.jar 20240115
  *   java -jar app.jar --export.param=20240115
- *   java -jar app.jar --export.param=20240115 --export.outputDir=/data/out --export.errorDir=/data/err
+ *   java -jar app.jar --export.param=20240115 --export.outputDir=/data/out
  * </pre>
  */
 @Profile("!test")
@@ -40,7 +42,6 @@ public class ExportRunner implements ApplicationRunner {
 
     private static final String OPTION_PARAM      = "export.param";
     private static final String OPTION_OUTPUT_DIR = "export.outputDir";
-    private static final String OPTION_ERROR_DIR  = "export.errorDir";
 
     private final ExportService exportService;
 
@@ -52,10 +53,8 @@ public class ExportRunner implements ApplicationRunner {
     public void run(ApplicationArguments args) throws Exception {
         String param     = resolveParam(args);
         String outputDir = resolveOutputDir(args);
-        String errorDir  = resolveErrorDir(args);
-        log.info("Starting export job: param='{}', outputDir='{}', errorDir='{}'",
-                param, outputDir, errorDir);
-        Path outputFile = exportService.export(param, outputDir, errorDir);
+        log.info("Starting export job: param='{}', outputDir='{}'", param, outputDir);
+        Path outputFile = exportService.export(param, outputDir);
         log.info("Export finished. Output file: {}", outputFile.toAbsolutePath());
     }
 
@@ -91,17 +90,6 @@ public class ExportRunner implements ApplicationRunner {
      */
     public String resolveOutputDir(ApplicationArguments args) {
         List<String> values = args.getOptionValues(OPTION_OUTPUT_DIR);
-        return (values != null && !values.isEmpty()) ? values.get(0) : null;
-    }
-
-    /**
-     * Resolves the optional error directory from {@code --export.errorDir=value}.
-     *
-     * @return the supplied path, or {@code null} if the option was not provided
-     *         (the service falls back to {@code app.error.directory})
-     */
-    public String resolveErrorDir(ApplicationArguments args) {
-        List<String> values = args.getOptionValues(OPTION_ERROR_DIR);
         return (values != null && !values.isEmpty()) ? values.get(0) : null;
     }
 }

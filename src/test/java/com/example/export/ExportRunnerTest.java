@@ -62,20 +62,4 @@ class ExportRunnerTest {
                 new DefaultApplicationArguments("--export.param=20240115");
         assertThat(runner.resolveOutputDir(args)).isNull();
     }
-
-    // ─── resolveErrorDir ──────────────────────────────────────────────────────
-
-    @Test
-    void resolveErrorDir_fromNamedOption() {
-        DefaultApplicationArguments args =
-                new DefaultApplicationArguments("--export.errorDir=/tmp/err");
-        assertThat(runner.resolveErrorDir(args)).isEqualTo("/tmp/err");
-    }
-
-    @Test
-    void resolveErrorDir_returnsNullWhenAbsent() {
-        DefaultApplicationArguments args =
-                new DefaultApplicationArguments("--export.param=20240115");
-        assertThat(runner.resolveErrorDir(args)).isNull();
-    }
 }
