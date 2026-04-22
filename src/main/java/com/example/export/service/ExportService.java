@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -102,8 +103,9 @@ public class ExportService {
         // 4. Stream rows and write to positional file
         AtomicLong rowCount = new AtomicLong(0);
 
+        // AbstractLineWriter does not implement AutoCloseable; wrap it to enable try-with-resources.
         AbstractLineWriter writer = ioBuilder.newWriter(outputFile.toString());
-        try {
+        try (Closeable writerCloseable = writer::close) {
             // Write header line
             AbstractLine headerLine = ioBuilder.newLine();
             headerLine.getFieldValue("id").set("id");
@@ -112,20 +114,22 @@ public class ExportService {
             headerLine.getFieldValue("status").set("status");
             writer.write(headerLine);
 
+            // Reuse a single AbstractLine for every data row to minimise allocations.
+            AbstractLine dataLine = ioBuilder.newLine();
+
             // Stream and write data lines
             personRepository.streamByStatus(
                     appProperties.getFilter().getStatus(),
                     batchSize,
                     person -> {
                         try {
-                            writer.write(toPositionalLine(ioBuilder, person));
+                            fillPositionalLine(dataLine, person);
+                            writer.write(dataLine);
                             rowCount.incrementAndGet();
                         } catch (IOException e) {
                             throw new ExportWriteException("Failed to write row: " + person, e);
                         }
                     });
-        } finally {
-            writer.close();
         }
 
         log.info("Export complete. {} rows written to {}", rowCount.get(), outputFile.toAbsolutePath());
@@ -133,15 +137,13 @@ public class ExportService {
     }
 
     /**
-     * Converts a {@link Person} into a JRecord fixed-width {@link AbstractLine}.
+     * Fills the reusable {@link AbstractLine} with data from a {@link Person}.
      */
-    private AbstractLine toPositionalLine(IFixedWidthIOBuilder ioBuilder, Person person) throws IOException {
-        AbstractLine line = ioBuilder.newLine();
+    private void fillPositionalLine(AbstractLine line, Person person) throws IOException {
         line.getFieldValue("id").set(String.valueOf(person.getId()));
         line.getFieldValue("name").set(person.getName() != null ? person.getName() : "");
         line.getFieldValue("email").set(person.getEmail() != null ? person.getEmail() : "");
         line.getFieldValue("status").set(person.getStatus() != null ? person.getStatus() : "");
-        return line;
     }
 
     /**
