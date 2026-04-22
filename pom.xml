@@ -56,21 +56,20 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- JRecord – fixed-width / positional file writing -->
+        <!-- JRecord via JitPack -->
         <dependency>
-            <groupId>net.sf.jrecord</groupId>
+            <groupId>com.github.bmTas</groupId>
             <artifactId>JRecord</artifactId>
             <version>0.90.2</version>
-            <scope>compile</scope>
         </dependency>
-
-        <!-- cb2xml – required transitive dependency of JRecord -->
+         
+        <!-- cb2xml via JitPack -->
         <dependency>
-            <groupId>net.sf</groupId>
+            <groupId>com.github.bmTas</groupId>
             <artifactId>cb2xml</artifactId>
             <version>1.01.08</version>
         </dependency>
-
+                      
         <!-- Test dependencies -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
