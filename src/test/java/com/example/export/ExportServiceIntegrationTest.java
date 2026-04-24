@@ -18,7 +18,6 @@ import org.springframework.test.context.ActiveProfiles;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -74,13 +73,6 @@ class ExportServiceIntegrationTest {
         if (outputFile != null && Files.exists(outputFile)) {
             Files.delete(outputFile);
         }
-        // Clean up any files left in the error directory by failure tests
-        Path errorDir = Paths.get(appProperties.getError().getDirectory());
-        if (Files.exists(errorDir)) {
-            try (var stream = Files.list(errorDir)) {
-                stream.forEach(f -> { try { Files.delete(f); } catch (IOException ignored) {} });
-            }
-        }
     }
 
     // ─── BatchConfigRepository ────────────────────────────────────────────────
@@ -115,10 +107,10 @@ class ExportServiceIntegrationTest {
     }
 
     @Test
-    void resolveOutputPath_usesOverrideDirectoryWhenSupplied(@TempDir Path tempDir) {
-        Path path = exportService.resolveOutputPath(TEST_DATE, tempDir.toString());
-        assertThat(path.getParent()).isEqualTo(tempDir);
-        assertThat(path.getFileName().toString()).isEqualTo("export_" + TEST_DATE + ".dat");
+    void resolveOutputPath_usesFullPathWhenSupplied(@TempDir Path tempDir) {
+        Path fullPath = tempDir.resolve("export_" + TEST_DATE + ".dat");
+        Path path = exportService.resolveOutputPath(TEST_DATE, fullPath.toString());
+        assertThat(path).isEqualTo(fullPath);
     }
 
     // ─── ExportService – header record ───────────────────────────────────────
@@ -281,7 +273,7 @@ class ExportServiceIntegrationTest {
                 .streamByDateAndStatus(any(), any(), anyInt(), any());
 
         assertThatThrownBy(
-                () -> exportService.export(TEST_DATE, tempOut.toString()))
+                () -> exportService.export(TEST_DATE, tempOut.resolve("out.dat").toString()))
                 .isInstanceOf(RuntimeException.class);
 
         // Status must have been rolled back to ACTIVE
@@ -290,27 +282,55 @@ class ExportServiceIntegrationTest {
         assertThat(status).isEqualTo("ACTIVE");
     }
 
-    // ─── ExportService – error directory ─────────────────────────────────────
+    @Test
+    void export_updatesStatusToCompletedOnSuccess(@TempDir Path tempOut) throws IOException {
+        insertPerson("Alice", "alice@test.com", "ACTIVE");
+        insertPerson("Bob",   "bob@test.com",   "ACTIVE");
+        insertPerson("Carol", "carol@test.com", "INACTIVE");
+
+        outputFile = exportService.export(TEST_DATE, tempOut.resolve("out.dat").toString());
+
+        // ACTIVE rows for the date must now be "C"
+        List<String> statuses = jdbcTemplate.queryForList(
+                "SELECT status FROM person WHERE name IN ('Alice','Bob')", String.class);
+        assertThat(statuses).containsOnly(COMPLETED_STATUS);
+
+        // INACTIVE row must be unchanged
+        String carolStatus = jdbcTemplate.queryForObject(
+                "SELECT status FROM person WHERE name = 'Carol'", String.class);
+        assertThat(carolStatus).isEqualTo("INACTIVE");
+    }
 
     @Test
-    void export_movesPartialFileToErrorDirOnFailure(@TempDir Path tempOut)
+    void export_rollsBackOnFailureDuringFinalStatusUpdate(@TempDir Path tempOut)
             throws IOException {
         insertPerson("Alice", "alice@test.com", "ACTIVE");
 
-        doThrow(new RuntimeException("Simulated streaming failure"))
+        // Throw on the second call to updateStatusByDate (the I→C update)
+        org.mockito.stubbing.Answer<Integer> throwOnSecondCall =
+                new org.mockito.stubbing.Answer<>() {
+                    int calls = 0;
+                    @Override
+                    public Integer answer(org.mockito.invocation.InvocationOnMock invocation)
+                            throws Throwable {
+                        if (++calls == 2) {
+                            throw new RuntimeException("Simulated failure on final status update");
+                        }
+                        return (Integer) invocation.callRealMethod();
+                    }
+                };
+        Mockito.doAnswer(throwOnSecondCall)
                 .when(personRepository)
-                .streamByDateAndStatus(any(), any(), anyInt(), any());
+                .updateStatusByDate(any(), any(), any());
 
         assertThatThrownBy(
-                () -> exportService.export(TEST_DATE, tempOut.toString()))
+                () -> exportService.export(TEST_DATE, tempOut.resolve("out.dat").toString()))
                 .isInstanceOf(RuntimeException.class);
 
-        // The partial file (header at minimum) must be in the configured error directory
-        Path movedFile = Paths.get(appProperties.getError().getDirectory(),
-                "export_" + TEST_DATE + ".dat");
-        assertThat(movedFile).exists();
-        List<String> lines = Files.readAllLines(movedFile);
-        assertThat(lines.get(0)).startsWith("H");
+        // The whole transaction must have rolled back: status remains ACTIVE
+        String status = jdbcTemplate.queryForObject(
+                "SELECT status FROM person WHERE name = 'Alice'", String.class);
+        assertThat(status).isEqualTo("ACTIVE");
     }
 
     // ─── helpers ─────────────────────────────────────────────────────────────
