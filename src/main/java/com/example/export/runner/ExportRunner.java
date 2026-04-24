@@ -24,14 +24,14 @@ import java.util.List;
  *
  * <p>Optional arguments:
  * <pre>
- *   --export.outputDir=/path/to/output   overrides app.output.directory
+ *   --export.outputFile=/path/to/output/file.dat   full path of the file to create
  * </pre>
  *
  * <p>Examples:
  * <pre>
  *   java -jar app.jar 20240115
  *   java -jar app.jar --export.param=20240115
- *   java -jar app.jar --export.param=20240115 --export.outputDir=/data/out
+ *   java -jar app.jar --export.param=20240115 --export.outputFile=/data/out/export_20240115.dat
  * </pre>
  */
 @Profile("!test")
@@ -40,8 +40,8 @@ public class ExportRunner implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(ExportRunner.class);
 
-    private static final String OPTION_PARAM      = "export.param";
-    private static final String OPTION_OUTPUT_DIR = "export.outputDir";
+    private static final String OPTION_PARAM       = "export.param";
+    private static final String OPTION_OUTPUT_FILE = "export.outputFile";
 
     private final ExportService exportService;
 
@@ -51,11 +51,11 @@ public class ExportRunner implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) throws Exception {
-        String param     = resolveParam(args);
-        String outputDir = resolveOutputDir(args);
-        log.info("Starting export job: param='{}', outputDir='{}'", param, outputDir);
-        Path outputFile = exportService.export(param, outputDir);
-        log.info("Export finished. Output file: {}", outputFile.toAbsolutePath());
+        String param      = resolveParam(args);
+        String outputFile = resolveOutputFile(args);
+        log.info("Starting export job: param='{}', outputFile='{}'", param, outputFile);
+        Path result = exportService.export(param, outputFile);
+        log.info("Export finished. Output file: {}", result.toAbsolutePath());
     }
 
     /**
@@ -83,13 +83,14 @@ public class ExportRunner implements ApplicationRunner {
     }
 
     /**
-     * Resolves the optional output directory from {@code --export.outputDir=value}.
+     * Resolves the optional full output file path from {@code --export.outputFile=value}.
      *
      * @return the supplied path, or {@code null} if the option was not provided
-     *         (the service falls back to {@code app.output.directory})
+     *         (the service falls back to {@code app.output.directory} and
+     *         {@code app.output.filename})
      */
-    public String resolveOutputDir(ApplicationArguments args) {
-        List<String> values = args.getOptionValues(OPTION_OUTPUT_DIR);
+    public String resolveOutputFile(ApplicationArguments args) {
+        List<String> values = args.getOptionValues(OPTION_OUTPUT_FILE);
         return (values != null && !values.isEmpty()) ? values.get(0) : null;
     }
 }

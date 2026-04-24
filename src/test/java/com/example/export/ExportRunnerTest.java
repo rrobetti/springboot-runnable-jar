@@ -47,19 +47,19 @@ class ExportRunnerTest {
                 .hasMessageContaining("runtime parameter is required");
     }
 
-    // ─── resolveOutputDir ─────────────────────────────────────────────────────
+    // ─── resolveOutputFile ────────────────────────────────────────────────────
 
     @Test
-    void resolveOutputDir_fromNamedOption() {
+    void resolveOutputFile_fromNamedOption() {
         DefaultApplicationArguments args =
-                new DefaultApplicationArguments("--export.outputDir=/tmp/out");
-        assertThat(runner.resolveOutputDir(args)).isEqualTo("/tmp/out");
+                new DefaultApplicationArguments("--export.outputFile=/tmp/out/export.dat");
+        assertThat(runner.resolveOutputFile(args)).isEqualTo("/tmp/out/export.dat");
     }
 
     @Test
-    void resolveOutputDir_returnsNullWhenAbsent() {
+    void resolveOutputFile_returnsNullWhenAbsent() {
         DefaultApplicationArguments args =
                 new DefaultApplicationArguments("--export.param=20240115");
-        assertThat(runner.resolveOutputDir(args)).isNull();
+        assertThat(runner.resolveOutputFile(args)).isNull();
     }
 }

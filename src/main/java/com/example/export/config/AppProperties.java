@@ -11,7 +11,6 @@ import org.springframework.stereotype.Component;
  *   <li>{@code app.output.directory} – directory where the output file will be written</li>
  *   <li>{@code app.output.filename}  – filename template; use {@code {param}} as a placeholder
  *       for the runtime parameter, e.g. {@code export_{param}.csv}</li>
- *   <li>{@code app.error.directory}  – directory where failed output files are moved</li>
  *   <li>{@code app.filter.status}    – value used to filter rows from the {@code person} table</li>
  * </ul>
  */
@@ -20,7 +19,6 @@ import org.springframework.stereotype.Component;
 public class AppProperties {
 
     private Output output = new Output();
-    private Error  error  = new Error();
     private Filter filter = new Filter();
 
     public Output getOutput() {
@@ -29,14 +27,6 @@ public class AppProperties {
 
     public void setOutput(Output output) {
         this.output = output;
-    }
-
-    public Error getError() {
-        return error;
-    }
-
-    public void setError(Error error) {
-        this.error = error;
     }
 
     public Filter getFilter() {
@@ -71,20 +61,6 @@ public class AppProperties {
 
         public void setFilename(String filename) {
             this.filename = filename;
-        }
-    }
-
-    public static class Error {
-
-        /** Directory where failed (partial) output files are moved for investigation. */
-        private String directory = "/tmp/export-error";
-
-        public String getDirectory() {
-            return directory;
-        }
-
-        public void setDirectory(String directory) {
-            this.directory = directory;
         }
     }
 
