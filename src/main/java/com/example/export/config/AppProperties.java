@@ -8,10 +8,9 @@ import org.springframework.stereotype.Component;
  *
  * <p>Properties are bound from the {@code app} prefix in {@code application.properties}.
  * <ul>
- *   <li>{@code app.output.directory} – directory where the output file will be written</li>
- *   <li>{@code app.output.filename}  – filename template; use {@code {param}} as a placeholder
- *       for the runtime parameter, e.g. {@code export_{param}.csv}</li>
- *   <li>{@code app.filter.status}    – value used to filter rows from the {@code person} table</li>
+ *   <li>{@code app.output.filePath} – full path of the output file; use {@code {param}} as a
+ *       placeholder for the runtime parameter, e.g. {@code /data/out/export_{param}.dat}</li>
+ *   <li>{@code app.filter.status}   – value used to filter rows from the {@code person} table</li>
  * </ul>
  */
 @Component
@@ -39,28 +38,18 @@ public class AppProperties {
 
     public static class Output {
 
-        /** Base directory for the generated file. */
-        private String directory = "/tmp/output";
-
         /**
-         * Filename template. The literal {@code {param}} is replaced at runtime with
-         * the value supplied on the command line.
+         * Full path template for the generated file. The literal {@code {param}} is replaced
+         * at runtime with the value supplied on the command line.
          */
-        private String filename = "export_{param}.dat";
-        public String getDirectory() {
-            return directory;
+        private String filePath = "/tmp/export-output/export_{param}.dat";
+
+        public String getFilePath() {
+            return filePath;
         }
 
-        public void setDirectory(String directory) {
-            this.directory = directory;
-        }
-
-        public String getFilename() {
-            return filename;
-        }
-
-        public void setFilename(String filename) {
-            this.filename = filename;
+        public void setFilePath(String filePath) {
+            this.filePath = filePath;
         }
     }
 

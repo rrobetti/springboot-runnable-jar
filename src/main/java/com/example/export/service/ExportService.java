@@ -104,8 +104,7 @@ public class ExportService {
      * @param param          date string in {@code YYYYMMDD} format; also used in the
      *                       output filename when falling back to configuration
      * @param outputFilePath full path of the file to create, or {@code null} to
-     *                       derive the path from {@code app.output.directory} and
-     *                       {@code app.output.filename}
+     *                       derive the path from {@code app.output.filePath}
      * @return path of the successfully written output file
      * @throws IOException            if the output file cannot be created or written
      * @throws java.time.format.DateTimeParseException if {@code param} is not a
@@ -161,23 +160,21 @@ public class ExportService {
 
     /**
      * Builds the output {@link Path} from the supplied full path or, when
-     * {@code outputFilePath} is {@code null}, by combining the configured
-     * directory with the filename template (replacing the {@code {param}}
-     * placeholder).
+     * {@code outputFilePath} is {@code null}, by resolving the configured file path
+     * template (replacing the {@code {param}} placeholder).
      *
      * @param param          value substituted for {@value #PARAM_PLACEHOLDER}
-     *                       when falling back to the configured filename template
+     *                       when falling back to the configured file path template
      * @param outputFilePath full output file path override, or {@code null} to
-     *                       use {@code app.output.directory} and
-     *                       {@code app.output.filename}
+     *                       use {@code app.output.filePath}
      */
     public Path resolveOutputPath(String param, String outputFilePath) {
         if (outputFilePath != null) {
             return Paths.get(outputFilePath);
         }
-        String filename = appProperties.getOutput().getFilename()
+        String resolvedPath = appProperties.getOutput().getFilePath()
                 .replace(PARAM_PLACEHOLDER, param);
-        return Paths.get(appProperties.getOutput().getDirectory(), filename);
+        return Paths.get(resolvedPath);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
