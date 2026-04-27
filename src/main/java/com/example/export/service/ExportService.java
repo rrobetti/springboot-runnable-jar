@@ -126,35 +126,51 @@ public class ExportService {
         personRepository.updateStatusByDate(date, fromStatus, PROCESSING_STATUS);
 
         // 2. Stream the updated rows and write the file.
-        AtomicLong rowCount = new AtomicLong(0);
+        AtomicLong rowCount      = new AtomicLong(0);
+        AtomicLong batchCount    = new AtomicLong(0);
+        AtomicLong batchRowCount = new AtomicLong(0);
 
         try (BufferedWriter writer = Files.newBufferedWriter(outputFile)) {
             // Header record
             writer.write(toHeaderRecord(param, fromStatus));
             writer.newLine();
 
-            // Detail records – flush every batchSize rows to bound buffer memory
+            // Detail records – flush every batchSize rows to bound buffer memory.
+            // setFetchSize is applied inside PersonRepository.streamByDateAndStatus so
+            // the JDBC driver fetches rows in the same batchSize chunks.
             personRepository.streamByDateAndStatus(date, PROCESSING_STATUS, batchSize,
                     rs -> {
                         try {
                             writer.write(toDetailRecord(rs));
                             writer.newLine();
                             long count = rowCount.incrementAndGet();
+                            batchRowCount.incrementAndGet();
                             if (count % batchSize == 0) {
                                 writer.flush();
-                                log.debug("Flushed {} records to file", count);
+                                long batch = batchCount.incrementAndGet();
+                                log.debug("Batch {} complete: all {} rows written to file",
+                                        batch, batchSize);
+                                batchRowCount.set(0);
                             }
                         } catch (IOException | SQLException e) {
                             throw new ExportWriteException("Failed to write row", e);
                         }
                     });
+
+            // Flush and account for any remaining rows in the final partial batch.
+            long remaining = batchRowCount.get();
+            if (remaining > 0) {
+                writer.flush();
+                long batch = batchCount.incrementAndGet();
+                log.debug("Final batch {} complete: {} rows written to file", batch, remaining);
+            }
         }
 
         // 3. Update all processed rows to COMPLETED.
         personRepository.updateStatusByDate(date, PROCESSING_STATUS, COMPLETED_STATUS);
 
-        log.info("Export complete. {} detail rows written to {}",
-                rowCount.get(), outputFile.toAbsolutePath());
+        log.info("Export complete. {} batch(es) processed, {} total detail row(s) written to {}",
+                batchCount.get(), rowCount.get(), outputFile.toAbsolutePath());
         return outputFile;
     }
 
