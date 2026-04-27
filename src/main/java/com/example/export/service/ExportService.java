@@ -143,18 +143,13 @@ public class ExportService {
                         try {
                             writer.write(toDetailRecord(rs));
                             writer.newLine();
-                            rowCount.incrementAndGet();
-                            long batchRows = batchRowCount.incrementAndGet();
-                            if (rowCount.get() % batchSize == 0) {
+                            long count = rowCount.incrementAndGet();
+                            batchRowCount.incrementAndGet();
+                            if (count % batchSize == 0) {
                                 writer.flush();
                                 long batch = batchCount.incrementAndGet();
-                                if (batchRows != batchSize) {
-                                    log.warn("Batch {} flushed but expected {} rows, wrote {}",
-                                            batch, batchSize, batchRows);
-                                } else {
-                                    log.debug("Batch {} complete: all {} rows written to file",
-                                            batch, batchRows);
-                                }
+                                log.debug("Batch {} complete: all {} rows written to file",
+                                        batch, batchSize);
                                 batchRowCount.set(0);
                             }
                         } catch (IOException | SQLException e) {
