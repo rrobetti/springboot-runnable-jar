@@ -62,4 +62,20 @@ class ExportRunnerTest {
                 new DefaultApplicationArguments("--export.param=20240115");
         assertThat(runner.resolveOutputFile(args)).isNull();
     }
+
+    // ─── resolveLogFile ───────────────────────────────────────────────────────
+
+    @Test
+    void resolveLogFile_fromNamedOption() {
+        DefaultApplicationArguments args =
+                new DefaultApplicationArguments("--export.logFile=/var/log/myapp.log");
+        assertThat(runner.resolveLogFile(args)).isEqualTo("/var/log/myapp.log");
+    }
+
+    @Test
+    void resolveLogFile_returnsNullWhenAbsent() {
+        DefaultApplicationArguments args =
+                new DefaultApplicationArguments("--export.param=20240115");
+        assertThat(runner.resolveLogFile(args)).isNull();
+    }
 }
