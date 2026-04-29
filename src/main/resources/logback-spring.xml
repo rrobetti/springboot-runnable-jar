@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
 
-    <!-- Reads export.code from the Spring Environment; defaults to "app" when not supplied -->
-    <springProperty name="LOG_CODE" source="export.code" defaultValue="app"/>
+    <!-- Reads export.logFile from the Spring Environment; defaults to logs/app-export.log when not supplied -->
+    <springProperty name="LOG_FILE" source="export.logFile" defaultValue="logs/app-export.log"/>
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
@@ -11,10 +11,10 @@
     </appender>
 
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>logs/${LOG_CODE}-export.log</file>
+        <file>${LOG_FILE}</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
             <!-- Roll daily; keep 30 days of history -->
-            <fileNamePattern>logs/${LOG_CODE}-export.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <fileNamePattern>${LOG_FILE}.%d{yyyy-MM-dd}</fileNamePattern>
             <maxHistory>30</maxHistory>
         </rollingPolicy>
         <encoder>

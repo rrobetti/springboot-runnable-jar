@@ -24,15 +24,15 @@ import java.util.List;
  *
  * <p>Optional arguments:
  * <pre>
- *   --export.code=CODE               prefix used for the log file name (e.g. myapp → myapp-export.log)
- *   --export.outputFile=/path/to/output/file.dat   full path of the file to create
+ *   --export.logFile=/path/to/app.log            full path of the log file to write
+ *   --export.outputFile=/path/to/output/file.dat full path of the file to create
  * </pre>
  *
  * <p>Examples:
  * <pre>
  *   java -jar app.jar 20240115
  *   java -jar app.jar --export.param=20240115
- *   java -jar app.jar --export.param=20240115 --export.code=myapp
+ *   java -jar app.jar --export.param=20240115 --export.logFile=/var/log/myapp.log
  *   java -jar app.jar --export.param=20240115 --export.outputFile=/data/out/export_20240115.dat
  * </pre>
  */
@@ -43,7 +43,7 @@ public class ExportRunner implements ApplicationRunner {
     private static final Logger log = LoggerFactory.getLogger(ExportRunner.class);
 
     private static final String OPTION_PARAM       = "export.param";
-    private static final String OPTION_CODE        = "export.code";
+    private static final String OPTION_LOG_FILE    = "export.logFile";
     private static final String OPTION_OUTPUT_FILE = "export.outputFile";
 
     private final ExportService exportService;
@@ -55,10 +55,10 @@ public class ExportRunner implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) throws Exception {
         String param      = resolveParam(args);
-        String code       = resolveCode(args);
+        String logFile    = resolveLogFile(args);
         String outputFile = resolveOutputFile(args);
-        log.info("Starting export job: param='{}', code='{}', outputFile='{}'",
-                param, code != null ? code : "app", outputFile);
+        log.info("Starting export job: param='{}', logFile='{}', outputFile='{}'",
+                param, logFile != null ? logFile : "logs/app-export.log", outputFile);
         Path result = exportService.export(param, outputFile);
         log.info("Export finished. Output file: {}", result.toAbsolutePath());
     }
@@ -88,13 +88,14 @@ public class ExportRunner implements ApplicationRunner {
     }
 
     /**
-     * Resolves the optional code prefix from {@code --export.code=value}.
-     * This value is used by Logback as the prefix of the log file name.
+     * Resolves the optional full log file path from {@code --export.logFile=value}.
+     * This value is used by Logback as the full path of the log file.
      *
-     * @return the supplied code, or {@code null} if the option was not provided
+     * @return the supplied path, or {@code null} if the option was not provided
+     *         (Logback falls back to {@code logs/app-export.log})
      */
-    public String resolveCode(ApplicationArguments args) {
-        List<String> values = args.getOptionValues(OPTION_CODE);
+    public String resolveLogFile(ApplicationArguments args) {
+        List<String> values = args.getOptionValues(OPTION_LOG_FILE);
         return (values != null && !values.isEmpty()) ? values.get(0) : null;
     }
 
