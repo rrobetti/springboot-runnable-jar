@@ -62,4 +62,20 @@ class ExportRunnerTest {
                 new DefaultApplicationArguments("--export.param=20240115");
         assertThat(runner.resolveOutputFile(args)).isNull();
     }
+
+    // ─── resolveCode ──────────────────────────────────────────────────────────
+
+    @Test
+    void resolveCode_fromNamedOption() {
+        DefaultApplicationArguments args =
+                new DefaultApplicationArguments("--export.code=myapp");
+        assertThat(runner.resolveCode(args)).isEqualTo("myapp");
+    }
+
+    @Test
+    void resolveCode_returnsNullWhenAbsent() {
+        DefaultApplicationArguments args =
+                new DefaultApplicationArguments("--export.param=20240115");
+        assertThat(runner.resolveCode(args)).isNull();
+    }
 }
