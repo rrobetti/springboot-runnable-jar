@@ -57,7 +57,8 @@ public class ExportRunner implements ApplicationRunner {
         String param      = resolveParam(args);
         String code       = resolveCode(args);
         String outputFile = resolveOutputFile(args);
-        log.info("Starting export job: param='{}', code='{}', outputFile='{}'", param, code, outputFile);
+        log.info("Starting export job: param='{}', code='{}', outputFile='{}'",
+                param, code != null ? code : "app", outputFile);
         Path result = exportService.export(param, outputFile);
         log.info("Export finished. Output file: {}", result.toAbsolutePath());
     }
