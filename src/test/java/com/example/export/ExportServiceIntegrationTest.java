@@ -129,6 +129,31 @@ class ExportServiceIntegrationTest {
         assertThat(header.substring(9, 19).stripTrailing()).isEqualTo("ACTIVE");
     }
 
+    // ─── ExportService – trailer record ──────────────────────────────────────
+
+    @Test
+    void toTrailerRecord_hasCorrectLength() {
+        String trailer = ExportService.toTrailerRecord(42L);
+        assertThat(trailer).hasSize(RECORD_LENGTH);
+    }
+
+    @Test
+    void toTrailerRecord_startsWithT_thenRightJustifiedCount() {
+        String trailer = ExportService.toTrailerRecord(5L);
+        assertThat(trailer.charAt(0)).isEqualTo('T');
+        // columns 2-21 (indices 1-20) contain the right-justified count
+        String countField = trailer.substring(1, 1 + WIDTH_TRL_COUNT);
+        assertThat(countField.stripLeading()).isEqualTo("5");
+    }
+
+    @Test
+    void toTrailerRecord_zeroCount() {
+        String trailer = ExportService.toTrailerRecord(0L);
+        assertThat(trailer.charAt(0)).isEqualTo('T');
+        String countField = trailer.substring(1, 1 + WIDTH_TRL_COUNT);
+        assertThat(countField.stripLeading()).isEqualTo("0");
+    }
+
     // ─── ExportService – full export ──────────────────────────────────────────
 
     @Test
@@ -138,8 +163,10 @@ class ExportServiceIntegrationTest {
 
         assertThat(Files.exists(outputFile)).isTrue();
         List<String> lines = Files.readAllLines(outputFile);
-        assertThat(lines).hasSize(1);
+        // header + trailer (no detail rows)
+        assertThat(lines).hasSize(2);
         assertThat(lines.get(0).charAt(0)).isEqualTo('H');
+        assertThat(lines.get(1).charAt(0)).isEqualTo('T');
     }
 
     @Test
@@ -151,12 +178,13 @@ class ExportServiceIntegrationTest {
         outputFile = exportService.export(TEST_DATE, null);
 
         List<String> lines = Files.readAllLines(outputFile);
-        // header + 2 ACTIVE rows (Carol is INACTIVE and must be excluded)
-        assertThat(lines).hasSize(3);
+        // header + 2 ACTIVE rows (Carol is INACTIVE and must be excluded) + trailer
+        assertThat(lines).hasSize(4);
         assertThat(lines.get(0).charAt(0)).isEqualTo('H');
         assertThat(lines).anyMatch(l -> l.contains("Alice"));
         assertThat(lines).anyMatch(l -> l.contains("Bob"));
         assertThat(lines).noneMatch(l -> l.contains("Carol"));
+        assertThat(lines.get(lines.size() - 1).charAt(0)).isEqualTo('T');
     }
 
     @Test
@@ -170,10 +198,11 @@ class ExportServiceIntegrationTest {
         outputFile = exportService.export(TEST_DATE, null);
 
         List<String> lines = Files.readAllLines(outputFile);
-        // header + 1 row (Alice only; Other is on a different date)
-        assertThat(lines).hasSize(2);
+        // header + 1 row (Alice only; Other is on a different date) + trailer
+        assertThat(lines).hasSize(3);
         assertThat(lines).anyMatch(l -> l.contains("Alice"));
         assertThat(lines).noneMatch(l -> l.contains("Other"));
+        assertThat(lines.get(lines.size() - 1).charAt(0)).isEqualTo('T');
     }
 
     @Test
@@ -183,9 +212,10 @@ class ExportServiceIntegrationTest {
         outputFile = exportService.export(TEST_DATE, null);
 
         List<String> lines = Files.readAllLines(outputFile);
-        assertThat(lines).hasSize(2);
+        assertThat(lines).hasSize(3); // header + detail + trailer
         assertThat(lines.get(0)).hasSize(RECORD_LENGTH_TEST); // header
         assertThat(lines.get(1)).hasSize(RECORD_LENGTH_TEST); // detail
+        assertThat(lines.get(2)).hasSize(RECORD_LENGTH_TEST); // trailer
     }
 
     @Test
@@ -196,6 +226,44 @@ class ExportServiceIntegrationTest {
         assertThat(header).startsWith("H");
         assertThat(header).contains(TEST_DATE);
         assertThat(header.substring(9, 19).stripTrailing()).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    void export_trailerIsLastLine_withZeroDetailRows() throws IOException {
+        // No persons in the table (cleaned in @BeforeEach)
+        outputFile = exportService.export(TEST_DATE, null);
+
+        List<String> lines = Files.readAllLines(outputFile);
+        String trailer = lines.get(lines.size() - 1);
+        assertThat(trailer.charAt(0)).isEqualTo('T');
+        // count field (columns 2-21, indices 1-20) must be "0"
+        assertThat(trailer.substring(1, 1 + WIDTH_TRL_COUNT).stripLeading()).isEqualTo("0");
+    }
+
+    @Test
+    void export_trailerCountMatchesDetailRows() throws IOException {
+        insertPerson("Alice", "alice@test.com", "ACTIVE");
+        insertPerson("Bob",   "bob@test.com",   "ACTIVE");
+        insertPerson("Carol", "carol@test.com", "INACTIVE"); // must not be counted
+
+        outputFile = exportService.export(TEST_DATE, null);
+
+        List<String> lines = Files.readAllLines(outputFile);
+        String trailer = lines.get(lines.size() - 1);
+        assertThat(trailer.charAt(0)).isEqualTo('T');
+        // 2 ACTIVE persons were exported
+        assertThat(trailer.substring(1, 1 + WIDTH_TRL_COUNT).stripLeading()).isEqualTo("2");
+    }
+
+    @Test
+    void export_trailerHasFixedWidth() throws IOException {
+        insertPerson("Alice", "alice@test.com", "ACTIVE");
+
+        outputFile = exportService.export(TEST_DATE, null);
+
+        List<String> lines = Files.readAllLines(outputFile);
+        String trailer = lines.get(lines.size() - 1);
+        assertThat(trailer).hasSize(RECORD_LENGTH_TEST);
     }
 
     @Test
@@ -241,10 +309,11 @@ class ExportServiceIntegrationTest {
         outputFile = exportService.export(TEST_DATE, null);
 
         List<String> lines = Files.readAllLines(outputFile);
-        assertThat(lines).hasSize(2); // header + 1 detail
-        // Both header and detail must be exactly RECORD_LENGTH chars
+        assertThat(lines).hasSize(3); // header + 1 detail + trailer
+        // All records must be exactly RECORD_LENGTH chars
         assertThat(lines.get(0)).hasSize(RECORD_LENGTH_TEST);
         assertThat(lines.get(1)).hasSize(RECORD_LENGTH_TEST);
+        assertThat(lines.get(2)).hasSize(RECORD_LENGTH_TEST);
     }
 
     @Test
@@ -257,8 +326,8 @@ class ExportServiceIntegrationTest {
         outputFile = exportService.export(TEST_DATE, null);
 
         List<String> lines = Files.readAllLines(outputFile);
-        // header + 10 ACTIVE rows
-        assertThat(lines).hasSize(11);
+        // header + 10 ACTIVE rows + trailer
+        assertThat(lines).hasSize(12);
     }
 
     // ─── ExportService – transaction rollback ─────────────────────────────────

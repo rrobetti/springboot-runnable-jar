@@ -50,6 +50,13 @@ import java.util.concurrent.atomic.AtomicLong;
  *   Columns 71-170: email  (left-justified,  space-padded, truncated to 100 chars)
  *   Columns 171-180: status (left-justified, space-padded, truncated to 10 chars)
  * </pre>
+ *
+ * <p><b>Trailer record layout (total {@value #RECORD_LENGTH} characters):</b>
+ * <pre>
+ *   Column   1    : Record type "T"
+ *   Columns  2-21 : Detail record count, right-justified, space-padded (20 chars)
+ *   Columns 22-180: Spaces                                              (159 chars)
+ * </pre>
  */
 @Service
 public class ExportService {
@@ -81,6 +88,10 @@ public class ExportService {
     public static final int WIDTH_HDR_TYPE   = 1;
     public static final int WIDTH_HDR_DATE   = 8;
     public static final int WIDTH_HDR_STATUS = 10;
+
+    // ── Trailer record field widths ───────────────────────────────────────────
+    public static final int WIDTH_TRL_TYPE  = 1;
+    public static final int WIDTH_TRL_COUNT = 20;
 
     private final AppProperties appProperties;
     private final BatchConfigRepository batchConfigRepository;
@@ -164,6 +175,10 @@ public class ExportService {
                 long batch = batchCount.incrementAndGet();
                 log.debug("Final batch {} complete: {} rows written to file", batch, remaining);
             }
+
+            // Trailer record
+            writer.write(toTrailerRecord(rowCount.get()));
+            writer.newLine();
         }
 
         // 3. Update all processed rows to COMPLETED.
@@ -225,7 +240,29 @@ public class ExportService {
     }
 
     /**
-     * Formats a single database row as a fixed-width detail record.
+     * Formats the trailer record for the output file.
+     *
+     * <p>Layout ({@value #RECORD_LENGTH} characters total):
+     * <ul>
+     *   <li>Column 1: record type {@code "T"}</li>
+     *   <li>Columns 2–21: {@code recordCount}, right-justified, space-padded</li>
+     *   <li>Columns 22–{@value #RECORD_LENGTH}: spaces</li>
+     * </ul>
+     *
+     * @param recordCount total number of detail records written
+     */
+    public static String toTrailerRecord(long recordCount) {
+        int fillerWidth = RECORD_LENGTH - WIDTH_TRL_TYPE - WIDTH_TRL_COUNT;
+        return String.format(
+                "%-" + WIDTH_TRL_TYPE  + "s" +
+                "%"  + WIDTH_TRL_COUNT + "d" +
+                "%-" + fillerWidth     + "s",
+                "T",
+                recordCount,
+                "");
+    }
+
+    /**
      * String values are left-justified and space-padded; the numeric id is
      * right-justified and space-padded. Values exceeding their field width are
      * truncated to prevent record-length corruption.
