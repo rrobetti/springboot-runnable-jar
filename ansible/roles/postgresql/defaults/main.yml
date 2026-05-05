@@ -1,0 +1,4 @@
+---
+# Password for the benchmark database user.
+# Override this variable (e.g. via Ansible Vault) before running the playbook.
+bench_user_password: "changeme"

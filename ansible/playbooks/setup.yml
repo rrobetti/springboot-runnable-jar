@@ -1,0 +1,6 @@
+---
+- name: Set up database server
+  hosts: db
+  become: true
+  roles:
+    - postgresql
