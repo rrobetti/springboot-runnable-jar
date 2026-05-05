@@ -60,14 +60,6 @@
     mode: "0640"
   notify: restart postgresql
 
-- name: Ensure PostgreSQL is listening on all interfaces
-  lineinfile:
-    path: /etc/postgresql/16/main/postgresql.conf
-    regexp: "^#?listen_addresses"
-    line: "listen_addresses = '*'"
-    state: present
-  notify: restart postgresql
-
 - name: Flush handlers to apply configuration before creating DB objects
   meta: flush_handlers
 
@@ -86,7 +78,7 @@
 - name: Create benchmark user
   postgresql_user:
     name: benchuser
-    password: "benchpass"
+    password: "{{ bench_user_password }}"
     state: present
   become_user: postgres
 
